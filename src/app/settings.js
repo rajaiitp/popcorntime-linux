@@ -65,7 +65,8 @@ Settings.providers = {
   },
   subtitle: 'OpenSubtitles',
   metadata: 'Trakttv',
-  torrentCache: 'TorrentCache'
+  torrentCache: 'TorrentCache',
+  torrentio: 'Torrentio'
 };
 
 Settings.trackers = {
@@ -180,6 +181,7 @@ Settings.httpApiPassword = 'popcorn';
 Settings.customMoviesServer = '';
 Settings.customSeriesServer = '';
 Settings.customAnimeServer = '';
+Settings.torrentioServer = 'https://torrentio.strem.fun/';
 Settings.dhtEnable = '';
 
 // Connection

@@ -85,6 +85,8 @@
                 imdb_id: $('.list .items .item.selected')[0] ? $('.list .items .item.selected')[0].dataset.imdbId : null,
                 season: $('.tab-episode.active')[0] ? $('.tab-episode.active')[0].attributes['data-season'].value : null,
                 episode: $('.tab-episode.active')[0] ? $('.tab-episode.active')[0].attributes['data-episode'].value : null,
+                file_name: torrent.file || '',
+                file_index: torrent.file_index,
                 device: App.Device.Collection.selected
             });
             App.vent.trigger('stream:start', torrentStart, download ? 'downloadOnly' : '' );

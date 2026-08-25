@@ -71,6 +71,7 @@
         initialize: function () {
             _this = this;
             this.views = {};
+            this.sourceRequestId = 0;
 
             const providers = this.model.get('providers');
             healthButton = new Common.HealthButton('.health-icon', this.retrieveTorrentHealth.bind(this));
@@ -167,6 +168,7 @@
                 return;
             }
             const showProvider = App.Config.getProviderForType('tvshow')[0];
+            const torrentio = App.Config.getProviderForType('torrentio');
             if (!info.episodeOnly) {
                 this.getRegion('torrentShowList').empty();
                 const torrentShowList = new App.View.TorrentList({
@@ -183,7 +185,13 @@
             const torrentList = new App.View.TorrentList({
                 model: new Backbone.Model({
                     provider: showProvider,
-                    promise: showProvider.episodeTorrents(this.model.get('imdb_id'), info.locale, episode.season, episode.episode),
+                    promise: torrentio ? torrentio.resolveSources(
+                        'episode:' + this.model.get('imdb_id') + ':' + episode.season + ':' + episode.episode,
+                        showProvider.episodeTorrents(this.model.get('imdb_id'), info.locale, episode.season, episode.episode),
+                        () => torrentio.episodeTorrents(this.model.get('imdb_id'), episode.season, episode.episode)
+                    ).then(result => result.sources) : showProvider.episodeTorrents(
+                        this.model.get('imdb_id'), info.locale, episode.season, episode.episode
+                    ),
                 }),
             });
             this.getRegion('torrentList').show(torrentList);
@@ -596,6 +604,7 @@
             var that = this;
             var title = that.model.get('title');
             var file_name = $(e.currentTarget).attr('data-file');
+            var file_index = $(e.currentTarget).attr('data-file-index');
             var episode = $(e.currentTarget).attr('data-episode');
             var season = $(e.currentTarget).attr('data-season');
             var name = $(e.currentTarget).attr('data-title');
@@ -675,6 +684,7 @@
                 device: App.Device.Collection.selected,
                 episodes: episodes,
                 file_name: file_name,
+                file_index: file_index === '' || file_index === undefined ? undefined : parseInt(file_index, 10),
                 auto_play: auto_play,
                 auto_id: parseInt(season) * 100 + parseInt(episode),
                 auto_play_data: episodes_data
@@ -725,6 +735,48 @@
             this.selectEpisode($(e.currentTarget));
             $('.startStreaming').trigger('click');
         },
+        loadEpisodeTorrentioSources: function(selectedEpisode) {
+            const torrentio = App.Config.getProviderForType('torrentio');
+            const imdbId = this.model.get('imdb_id');
+            if (!torrentio || !imdbId || !selectedEpisode) {
+                return;
+            }
+
+            const season = String(selectedEpisode.season);
+            const episode = String(selectedEpisode.episode);
+            const requestId = ++this.sourceRequestId;
+            const current = selectedEpisode.torrents || {};
+
+            torrentio.resolveSources(
+                'episode:' + imdbId + ':' + season + ':' + episode,
+                Promise.resolve(current),
+                () => torrentio.episodeTorrents(imdbId, season, episode)
+            ).then((result) => {
+                if (!result.usedFallback || requestId !== this.sourceRequestId || this.model.get('selectedEpisode') !== selectedEpisode) {
+                    return;
+                }
+
+                const merged = torrentio.mergeQualityMaps(current, result.sources);
+                if (!Object.keys(merged).length) {
+                    return;
+                }
+
+                const torrents = Object.assign({}, this.model.get('torrents'));
+                const seasonTorrents = Object.assign({}, torrents[season]);
+                const updatedEpisode = Object.assign({}, selectedEpisode, {torrents: merged});
+                seasonTorrents[episode] = updatedEpisode;
+                torrents[season] = seasonTorrents;
+                this.model.set('torrents', torrents);
+                this.model.set('selectedEpisode', updatedEpisode);
+
+                const selector = this.getRegion('qualitySelector').currentView;
+                if (selector) {
+                    selector.updateTorrents(merged);
+                }
+                this.toggleSourceLink();
+            }).catch((error) => win.warn('Torrentio episode fallback failed:', error));
+        },
+
         // Helper Function
         selectSeason: function ($elem) {
             $('.tab-season.active').removeClass('active');
@@ -778,7 +830,15 @@
             startStreaming.attr('data-season', selectedEpisode.season);
             startStreaming.attr('data-title', selectedEpisode.title);
 
-            _this.ui.startStreaming.show();
+            if (selectedEpisode.torrents && Object.keys(selectedEpisode.torrents).some(function(key) {
+                var torrent = selectedEpisode.torrents[key];
+                return torrent && (torrent.url || torrent.magnet);
+            })) {
+                _this.ui.startStreaming.show();
+            } else {
+                _this.selectTorrent(null, null);
+            }
+            _this.loadEpisodeTorrentioSources(selectedEpisode);
 
             App.vent.trigger('update:torrents', this.model.get('showTorrents') ? {
                 locale: this.model.get('contextLocale'),
@@ -788,8 +848,16 @@
 
         selectTorrent: function(torrent, key) {
             var startStreaming = $('.startStreaming');
+            if (!torrent) {
+                startStreaming.removeAttr('data-file data-file-index data-torrent data-source data-provider data-quality').hide();
+                $('#download-torrent').removeAttr('data-torrent data-file').hide();
+                return;
+            }
             var downloadButton = $('#download-torrent');
+            startStreaming.show();
+            downloadButton.show();
             startStreaming.attr('data-file', torrent.file || '');
+            startStreaming.attr('data-file-index', torrent.file_index === undefined ? '' : torrent.file_index);
             startStreaming.attr('data-torrent', torrent.url);
             startStreaming.attr('data-source', torrent.source);
             startStreaming.attr('data-provider', torrent.provider);

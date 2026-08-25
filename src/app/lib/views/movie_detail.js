@@ -82,14 +82,57 @@
         return;
       }
       const provider = App.Config.getProviderForType('movie')[0];
+      const torrentio = App.Config.getProviderForType('torrentio');
       const altShowAll = provider.config.noShowAll ? _.shuffle((Settings.dhtInfo.server ? Settings.dhtInfo.server.split(',') : Settings.customServers.movie).filter(a => !a.includes(provider.apiURL))) : null;
+      const primaryPromise = provider.torrents(this.model.get('imdb_id'), lang, altShowAll);
+      const promise = torrentio ? torrentio.resolveSources(
+        'movie:' + this.model.get('imdb_id'),
+        primaryPromise,
+        () => torrentio.movieTorrents(this.model.get('imdb_id'))
+      ).then(result => result.sources) : primaryPromise;
       const torrentList = new App.View.TorrentList({
         model: new Backbone.Model({
           provider,
-          promise: provider.torrents(this.model.get('imdb_id'), lang, altShowAll),
+          promise,
         }),
       });
       this.getRegion('TorrentList').show(torrentList);
+    },
+
+    loadTorrentioSources: function() {
+      const torrentio = App.Config.getProviderForType('torrentio');
+      const imdbId = this.model.get('imdb_id');
+      if (!torrentio || !imdbId) {
+        return;
+      }
+
+      const langs = this.model.get('langs');
+      const language = this.model.get('defaultAudio') || (langs && Object.keys(langs)[0]) || 'en';
+      const current = (langs && langs[language]) || this.model.get('torrents') || {};
+
+      torrentio.resolveSources(
+        'movie:' + imdbId,
+        Promise.resolve(current),
+        () => torrentio.movieTorrents(imdbId)
+      ).then((result) => {
+        if (!result.usedFallback) {
+          return;
+        }
+
+        const merged = torrentio.mergeQualityMaps(current, result.sources);
+        if (!Object.keys(merged).length) {
+          return;
+        }
+
+        const nextLangs = Object.assign({}, langs || {});
+        nextLangs[language] = merged;
+        this.model.set('langs', nextLangs);
+        this.model.set('torrents', merged);
+        $('.magnet-link, .health-icon, .source-link').show();
+        if (this.views.play && this.views.play.refreshSources) {
+          this.views.play.refreshSources();
+        }
+      }).catch((error) => win.warn('Torrentio movie fallback failed:', error));
     },
 
     onChangeQuality: function (quality) {
@@ -119,6 +162,7 @@
       App.MovieDetailView = this;
 
       this.localizeTexts();
+      this.loadTorrentioSources();
       this.hideUnused();
       this.loadImages();
       this.loadComponents();

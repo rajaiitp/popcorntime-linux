@@ -89,7 +89,13 @@
   }
 
   App.bootstrapPromise = loadNpmSettings()
-    .then(loadProviders)
+    .then(function() {
+      // Torrentio is a source provider, not a catalog/tab provider. Keep it
+      // out of the main browser collections while making it available to
+      // movie and episode source lists.
+      Settings.providers.torrentio = 'Torrentio';
+      return loadProviders();
+    })
     .then(loadProvidersDelayed)
     .then(function(values) {
       return _.filter(

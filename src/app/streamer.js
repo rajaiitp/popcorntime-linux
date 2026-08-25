@@ -1,5 +1,6 @@
 const Server = require("webtorrent/lib/server");
 const FileServer = require("./fileserver");
+const TorrentioUtils = require('./butter-provider/torrentio-utils');
 (function (App) {
     'use strict';
     var subtitle_retry;
@@ -495,6 +496,10 @@ const FileServer = require("./fileserver");
         selectFile: function (torrent, fileName) {
             let fileIndex = 0;
             let fileSize = 0;
+            const requestedFileIndex = TorrentioUtils.selectFileIndex(torrent.files, this.torrentModel.get('file_index'));
+            if (requestedFileIndex !== -1) {
+                fileName = torrent.files[requestedFileIndex].path;
+            }
             if (!fileName) {
                 for (let i in torrent.files) {
                     if (fileSize < torrent.files[i].length) {

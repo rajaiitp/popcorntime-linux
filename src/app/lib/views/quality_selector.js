@@ -18,19 +18,25 @@
         },
 
         initQuality: function() {
-            var selectedKey = null;
-            for (let [key, torrent] of Object.entries(this.model.get('sortedTorrents'))) {
-                if (!torrent) {
-                    continue;
-                }
-                if (!selectedKey || Common.qualityCollator.compare(key, Settings[this.model.get('defaultQualityKey')]) <= 0) {
-                    selectedKey = key;
+            var selectedKey = this.model.get('selectedQuality');
+            if (!selectedKey || !this.model.get('sortedTorrents')[selectedKey]) {
+                selectedKey = null;
+            }
+            if (!selectedKey) {
+                for (let [key, torrent] of Object.entries(this.model.get('sortedTorrents'))) {
+                    if (!torrent) {
+                        continue;
+                    }
+                    if (!selectedKey || Common.qualityCollator.compare(key, Settings[this.model.get('defaultQualityKey')]) <= 0) {
+                        selectedKey = key;
+                    }
                 }
             }
             this.selectQuality(selectedKey);
         },
 
         updateTorrents: function (torrents) {
+            torrents = torrents || {};
             let keys = Object.keys(torrents).sort(Common.qualityCollator.compare);
             let sortedTorrents = {};
             for (let key of this.model.get('required')) {
@@ -78,6 +84,10 @@
         },
 
         selectQuality: function (key) {
+            if (key === null || key === undefined || !this.model.get('sortedTorrents')[key]) {
+                return;
+            }
+            this.model.set('selectedQuality', key);
             $(this.ui.list).find('div').removeClass('active');
             $(this.ui.list).find('div:contains("'+key+'")').addClass('active');
             var torrents = this.model.get('sortedTorrents');

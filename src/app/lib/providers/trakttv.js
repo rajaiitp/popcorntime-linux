@@ -1,3 +1,5 @@
+const MovieCatalogFallbackUtils = require('./lib/movie_catalog_fallback');
+
 (function(App) {
     'use strict';
 
@@ -218,6 +220,36 @@
                 attrs.poster = imgs.poster || attrs.poster;
                 attrs.backdrop = imgs.background || imgs.backgdrop;
                 return attrs;
+            });
+        },
+
+        fetchMovieCatalog: function(filters) {
+            filters = filters || {};
+            var params = {
+                page: Number(filters.page) || 1,
+                limit: 50,
+                extended: 'full',
+                pagination: true
+            };
+            var genre = MovieCatalogFallbackUtils.normalizeGenre(filters.genre);
+            var request;
+
+            if (genre && genre !== 'all') {
+                params.genres = genre === 'sci-fi' ? 'science-fiction' : genre;
+            }
+
+            if (filters.keywords && filters.keywords.trim()) {
+                params.query = filters.keywords.trim();
+                params.type = 'movie';
+                request = this.client.search.text(params);
+            } else if (filters.sorter === 'popularity') {
+                request = this.client.movies.popular(params);
+            } else {
+                request = this.client.movies.trending(params);
+            }
+
+            return request.then(function(data) {
+                return MovieCatalogFallbackUtils.normalizeTraktResponse(data, params.page);
             });
         },
 

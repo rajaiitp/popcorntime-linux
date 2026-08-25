@@ -593,5 +593,19 @@
 	"Resetting settings...": "Resetting settings...",
 	"Rename": "Rename",
 	"Refresh": "Refresh",
-	"Help": "Help"
+	"Help": "Help",
+	"the URL(s)": "the URL(s)",
+	"The remote movies API failed to respond, please check %s and try again later": "The remote movies API failed to respond, please check %s and try again later",
+	"thepiratebay.org": "thepiratebay.org",
+	"1337x.to": "1337x.to",
+	"solidtorrents.to": "solidtorrents.to",
+	"torrentgalaxy.to": "torrentgalaxy.to",
+	"nyaa.si": "nyaa.si",
+	"Home And Garden": "Home And Garden",
+	"The remote shows API failed to respond, please check %s and try again later": "The remote shows API failed to respond, please check %s and try again later",
+	"No favorites found...": "No favorites found...",
+	"No watched items found...": "No watched items found...",
+	"Health Medium": "Health Medium",
+	"Science-Fiction": "Science-Fiction",
+	"Superhero": "Superhero"
 }

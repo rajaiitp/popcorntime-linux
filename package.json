@@ -19,7 +19,7 @@
     "css": "gulp css",
     "dist": "gulp dist",
     "start": "gulp run",
-    "test": "gulp test",
+    "test": "node test/torrentio.js && node test/torrentio_provider.js && node test/movie_catalog_fallback.js",
     "postinstall": "patch-package"
   },
   "chromium-args": "--enable-node-worker --no-sandbox",
@@ -41,7 +41,8 @@
     "butter-provider/movie.js",
     "butter-provider/anime.js",
     "butter-provider/tv.js",
-    "butter-provider/yts.js"
+    "butter-provider/yts.js",
+    "butter-provider/torrentio.js"
   ],
   "dependencies": {
     "@fortawesome/fontawesome-free": "^6.4",

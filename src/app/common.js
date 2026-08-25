@@ -40,9 +40,9 @@ Common.calcRatio = function (seeds, peers) {
 Common.retrieveTorrentHealth = function (torrent, cb) {
     const torrentURL = typeof torrent === 'string'
         ? torrent
-        : torrent.magnet || torrent.url || torrent.magnetURI;
+        : torrent && (torrent.magnet || torrent.url || torrent.magnetURI);
     if (!torrentURL) {
-        cb(new Error('Torrent URL could not be obtained'), null);
+        return cb(new Error('Torrent URL could not be obtained'), null);
     }
     // check for 'magnet:?' because api sometimes sends back links, not magnets
     if (!torrentURL.startsWith('magnet:?')) {

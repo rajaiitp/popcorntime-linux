@@ -266,6 +266,7 @@ gulp.task('jshint', () => {
       'gulpfile.js',
       'src/app/lib/*.js',
       'src/app/lib/**/*.js',
+      'src/app/butter-provider/torrentio*.js',
       'src/app/vendor/videojshooks.js',
       'src/app/vendor/videojsplugins.js',
       'src/app/*.js'

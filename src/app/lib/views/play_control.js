@@ -40,9 +40,9 @@
         this.model.get('title')
       );
       if (!this.model.get('langs')) {
-        this.model.set('langs', { en: this.model.get('torrents') });
+        this.model.set('langs', { en: this.model.get('torrents') || {} });
       } else {
-        this.model.set('torrents', this.model.get('langs')[this.model.get('defaultAudio')]);
+        this.model.set('torrents', this.model.get('langs')[this.model.get('defaultAudio')] || {});
       }
       this.model.set('showTorrentsMore', providers.torrent.feature('torrents'));
       this.model.set('showTorrents', false);
@@ -62,6 +62,7 @@
           App.vent.trigger('change:quality', this.model.get('quality'));
         }.bind(this)
       );
+      this.model.on('change:torrents', this.refreshSources.bind(this));
     },
 
     onAttach: function() {
@@ -90,11 +91,24 @@
     hideUnused: function() {
       if (!this.model.get('torrents')) {
         // no torrents
-        $('#player-chooser, #audio-dropdown, #subs-dropdown').hide();
+        $('#player-chooser, #audio-dropdown, #subs-dropdown, #quality-selector, #watch-now, #download-torrent').hide();
       }
 
       if (!this.model.get('trailer')) {
         $('#watch-trailer').hide();
+      }
+    },
+
+    refreshSources: function() {
+      var torrents = this.model.get('torrents');
+      if (!torrents || !Object.keys(torrents).some(function(key) { return torrents[key]; })) {
+        return;
+      }
+
+      $('#player-chooser, #audio-dropdown, #subs-dropdown, #quality-selector, #watch-now, #download-torrent').show();
+      var selector = this.getRegion('qualitySelector').currentView;
+      if (selector) {
+        selector.updateTorrents(torrents);
       }
     },
 
@@ -282,6 +296,8 @@
         quality: quality,
         lang: this.audio_selected,
         type: 'movie',
+        file_name: defaultTorrent.file || '',
+        file_index: defaultTorrent.file_index,
         device: App.Device.Collection.selected,
         cover: this.model.get('cover')
       });
@@ -355,6 +371,7 @@
       App.vent.off('audio:lang');
       App.vent.off('update:subtitles');
       this.model.off('change:quality');
+      this.model.off('change:torrents');
       Object.values(this.views).forEach(v => v.destroy());
     }
   });

@@ -1,9 +1,32 @@
+const MovieCatalogFallback = require('./lib/movie_catalog_fallback');
+
 (function (App) {
     'use strict';
 
     var getDataFromProvider = function (providers, collection) {
         var filters = Object.assign(collection.filter, {page: providers.torrent.page});
-        return providers.torrent.fetch(filters)
+        var metadata = providers.metadata;
+        var firstMovieProvider = collection.type === 'movies' && collection.providers.torrents[0] === providers.torrent;
+        var canUseMovieFallback = firstMovieProvider && metadata && typeof metadata.fetchMovieCatalog === 'function';
+        var request;
+
+        if (collection._movieCatalogFallback && canUseMovieFallback) {
+            request = metadata.fetchMovieCatalog(filters);
+        } else if (canUseMovieFallback && providers.torrent.page === 1) {
+            request = MovieCatalogFallback.resolve(
+                providers.torrent.fetch(filters),
+                function() { return metadata.fetchMovieCatalog(filters); }
+            ).then(function(result) {
+                if (result.usedFallback) {
+                    collection._movieCatalogFallback = true;
+                }
+                return result.data;
+            });
+        } else {
+            request = providers.torrent.fetch(filters);
+        }
+
+        return request
             .then(function (torrents) {
                 // If a new request was started...
                 _.each(torrents.results, function (movie) {
@@ -14,8 +37,8 @@
                      */
                     var model = collection.get(id);
                     if (model) {
-                        var ts = model.get('torrents');
-                        _.extend(ts, movie.torrents);
+                        var ts = model.get('torrents') || {};
+                        _.extend(ts, movie.torrents || {});
                         model.set('torrents', ts);
 
                         return;
@@ -75,7 +98,10 @@
 
                 torrentProvider.loading = true;
                 return getDataFromProvider(providers, self)
-                    .then(torrentProvider.loading = false)
+                    .then(function(torrents) {
+                        torrentProvider.loading = false;
+                        return torrents;
+                    })
                     .then(function (torrents) {
                         // set state, can't fail
                         if (torrents.results.length !== 0) {
