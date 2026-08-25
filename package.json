@@ -19,7 +19,7 @@
     "css": "gulp css",
     "dist": "gulp dist",
     "start": "gulp run",
-    "test": "node test/torrentio.js && node test/torrentio_provider.js && node test/movie_catalog_fallback.js",
+    "test": "node test/torrentio.js && node test/torrentio_provider.js && node test/movie_catalog_fallback.js && node test/show_catalog_fallback.js",
     "postinstall": "patch-package"
   },
   "chromium-args": "--enable-node-worker --no-sandbox",

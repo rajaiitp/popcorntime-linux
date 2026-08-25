@@ -3,6 +3,80 @@
 const Generic = require('./generic');
 const sanitize = require('butter-sanitize');
 const i18n = require('i18n');
+const Trakt = require('trakt.tv');
+const ShowCatalogFallbackUtils = require('../lib/show_catalog_fallback');
+var fallbackClient;
+
+function getPageWindow() {
+  try {
+    if (typeof nw !== 'undefined' && nw.Window && nw.Window.get) {
+      return nw.Window.get().window;
+    }
+  } catch (error) {}
+  return typeof window !== 'undefined' ? window : null;
+}
+
+function getTraktProvider() {
+  var pageWindow = getPageWindow();
+  var app = pageWindow && pageWindow.App;
+  if (!app && typeof App !== 'undefined') {
+    app = App;
+  }
+  if (!app || !app.Providers) {
+    return null;
+  }
+
+  if (app.Trakt) {
+    return app.Trakt;
+  }
+  if (app.Providers._cache && app.Providers._cache.Trakttv) {
+    return app.Providers._cache.Trakttv;
+  }
+
+  try {
+    return app.Providers.get('Trakttv');
+  } catch (error) {
+    return null;
+  }
+}
+
+function getTraktClient() {
+  var provider = getTraktProvider();
+  if (provider && provider.client) {
+    return provider.client;
+  }
+  var pageWindow = getPageWindow();
+  var settings = pageWindow && pageWindow.Settings;
+  if (!settings && typeof Settings !== 'undefined') {
+    settings = Settings;
+  }
+  if (!fallbackClient && settings && settings.trakttv && settings.trakttv.client_id) {
+    fallbackClient = new Trakt({
+      client_id: settings.trakttv.client_id,
+      client_secret: settings.trakttv.client_secret
+    });
+  }
+  return fallbackClient;
+}
+
+function fetchTraktShowCatalog(client, filters) {
+  filters = filters || {};
+  var page = Number(filters.page) || 1;
+  var params = {page: page, limit: 50, extended: 'full'};
+  var request;
+
+  if (filters.keywords && filters.keywords.trim()) {
+    request = client.search.text({query: filters.keywords.trim(), type: 'show', page: page, limit: 50});
+  } else if (filters.sorter === 'popularity') {
+    request = client.shows.popular(params);
+  } else {
+    request = client.shows.trending(params);
+  }
+
+  return request.then(function(data) {
+    return ShowCatalogFallbackUtils.normalizeTraktResponse(data, page);
+  });
+}
 
 class TVApi extends Generic {
   constructor(args) {
@@ -11,6 +85,36 @@ class TVApi extends Generic {
     this.language = args.language;
     this.contentLanguage = args.contentLanguage || this.language;
     this.contentLangOnly = args.contentLangOnly || false;
+  }
+
+  hasApiUrls() {
+    return Array.isArray(this.apiURL) && this.apiURL.some(url => !!url);
+  }
+
+  fallback(method, args) {
+    if (!this.config || this.config.type !== 'tvshow') {
+      return Promise.reject(new Error('Trakt show fallback is not used for ' + (this.config && this.config.type)));
+    }
+
+    var provider = getTraktProvider();
+    if (provider && typeof provider[method] === 'function') {
+      return provider[method].apply(provider, args || []);
+    }
+
+    var client = getTraktClient();
+    if (!client) {
+      return Promise.reject(new Error('Trakt show fallback is unavailable: ' + method));
+    }
+
+    if (method === 'getShowMetadata') {
+      var id = args && args[0];
+      var oldData = args && args[1];
+      return ShowCatalogFallbackUtils.fromTrakt(client, id, oldData && oldData.contextLocale, oldData);
+    }
+    if (method === 'fetchShowCatalog') {
+      return fetchTraktShowCatalog(client, args && args[0]);
+    }
+    return Promise.reject(new Error('Unsupported Trakt show fallback: ' + method));
   }
 
   extractIds(items) {
@@ -43,17 +147,20 @@ class TVApi extends Generic {
     }
 
     const uri = `shows/${filters.page}?` + new URLSearchParams(params);
-    return this._get(0, uri).then(data => {
+    const request = this.hasApiUrls() ? this._get(0, uri).then(data => {
       data.forEach(entry => (entry.type = 'show'));
 
       return {
         results: sanitize(data),
         hasMore: true
       };
-    });
+    }) : Promise.reject(new Error('TV API URL is not configured'));
+
+    return request.catch(() => this.fallback('fetchShowCatalog', [filters]));
   }
 
   detail(imdb_id, old_data, debug) {
+    old_data = old_data || {};
     return this.contentOnLang(imdb_id, old_data.contextLocale, old_data.title1);
   }
 
@@ -65,7 +172,7 @@ class TVApi extends Generic {
       contentLocale: lang,
     };
     const uri = `show/${imdb_id}/torrents?` + new URLSearchParams(params);
-    return this._get(0, uri);
+    return this.hasApiUrls() ? this._get(0, uri) : Promise.resolve([]);
   }
 
   episodeTorrents(imdb_id, lang, season, episode) {
@@ -74,7 +181,7 @@ class TVApi extends Generic {
       contentLocale: lang,
     };
     const uri = `show/${imdb_id}/${season}/${episode}/torrents?` + new URLSearchParams(params);
-    return this._get(0, uri);
+    return this.hasApiUrls() ? this._get(0, uri) : Promise.resolve([]);
   }
 
   contentOnLang(imdb_id, lang, title1) {
@@ -86,14 +193,17 @@ class TVApi extends Generic {
       params.contentLocale = lang;
     }
     const uri = `show/${imdb_id}?` + new URLSearchParams(params);
-
-    return this._get(0, uri).then(data => {
+    const request = this.hasApiUrls() ? this._get(0, uri).then(data => {
       if (title1) {
         data.title = title1;
       }
       return data;
-      return sanitize(data);
-    });
+    }) : Promise.reject(new Error('TV API URL is not configured'));
+
+    return request.catch(() => this.fallback('getShowMetadata', [imdb_id, {
+      contextLocale: lang,
+      title1: title1
+    }]));
   }
 
   filters() {

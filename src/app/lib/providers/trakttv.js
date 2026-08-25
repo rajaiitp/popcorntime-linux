@@ -1,4 +1,5 @@
 const MovieCatalogFallbackUtils = require('./lib/movie_catalog_fallback');
+const ShowCatalogFallbackUtils = require('./lib/show_catalog_fallback');
 
 (function(App) {
     'use strict';
@@ -259,6 +260,43 @@ const MovieCatalogFallbackUtils = require('./lib/movie_catalog_fallback');
             }
 
             return this.client.movies.summary({id: id, extended: 'full'});
+        },
+
+        getShowMetadata: function (id, oldData) {
+            if (!id) {
+                return Promise.reject();
+            }
+
+            var language = oldData && oldData.contextLocale ? oldData.contextLocale : Settings.language;
+            return ShowCatalogFallbackUtils.fromTrakt(this.client, id, language, oldData);
+        },
+
+        fetchShowCatalog: function (filters) {
+            filters = filters || {};
+            var page = Number(filters.page) || 1;
+            var params = {
+                page: page,
+                limit: 50,
+                extended: 'full'
+            };
+            var request;
+
+            if (filters.keywords && filters.keywords.trim()) {
+                request = this.client.search.text({
+                    query: filters.keywords.trim(),
+                    type: 'show',
+                    page: page,
+                    limit: 50
+                });
+            } else if (filters.sorter === 'popularity') {
+                request = this.client.shows.popular(params);
+            } else {
+                request = this.client.shows.trending(params);
+            }
+
+            return request.then(function(data) {
+                return ShowCatalogFallbackUtils.normalizeTraktResponse(data, page);
+            });
         },
 
         onReady: function(forced, first) {
